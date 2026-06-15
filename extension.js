@@ -568,16 +568,20 @@ export default class UltrawideShortcutsExtension extends Extension {
         console.error(`ultrawide-shortcuts: failed to launch '${command}': ${e.message}`);
         Main.notify('Ultrawide Shortcuts', `Failed to launch: ${command}\n${e.message}`);
       }
-    } else if (!current || !matches.some(w => w.metaWindow === current.metaWindow)) {
-      // Matching window exists but isn't focused — activate first match
-      Main.activateWindow(matches[0].metaWindow);
-    } else if (matches.length > 1) {
-      // Current window IS a match and there are multiple — cycle to next
-      const currentIdx = matches.findIndex(w => w.metaWindow === current.metaWindow);
-      const nextIdx = (currentIdx + 1) % matches.length;
-      Main.activateWindow(matches[nextIdx].metaWindow);
+    } else {
+      // A different shortcut activating a window cancels any pending launch
+      this._clearPendingLaunch();
+      if (!current || !matches.some(w => w.metaWindow === current.metaWindow)) {
+        // Matching window exists but isn't focused — activate first match
+        Main.activateWindow(matches[0].metaWindow);
+      } else if (matches.length > 1) {
+        // Current window IS a match and there are multiple — cycle to next
+        const currentIdx = matches.findIndex(w => w.metaWindow === current.metaWindow);
+        const nextIdx = (currentIdx + 1) % matches.length;
+        Main.activateWindow(matches[nextIdx].metaWindow);
+      }
+      // Single match already focused — do nothing
     }
-    // Single match already focused — do nothing
   }
 
   _clearPendingLaunch() {
