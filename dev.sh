@@ -8,7 +8,7 @@ DEBUG_FILE="/tmp/ultrawide-shortcuts-debug"
 
 case "${1:-help}" in
   reload)
-    # On GNOME 49 Wayland, ES modules are cached for the shell process lifetime.
+    # On Wayland, ES modules are cached for the shell process lifetime.
     # disable/enable re-runs lifecycle methods but does NOT re-import source files.
     # A full session restart is needed to pick up code changes.
     echo ":: Restarting GNOME Shell session to reload extension source..."

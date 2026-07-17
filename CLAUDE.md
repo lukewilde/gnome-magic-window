@@ -1,6 +1,6 @@
 # Ultrawide Shortcuts
 
-GNOME Shell 49 extension (GJS ES6+ modules, GObject Introspection).
+GNOME Shell 45–50 extension (GJS ES6+ modules, GObject Introspection).
 
 ## Critical: Source Changes Require Session Restart
 

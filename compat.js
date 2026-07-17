@@ -1,4 +1,4 @@
-// compat.js — Shims for Mutter API changes across supported shell versions (45–49).
+// compat.js — Shims for Mutter API changes across supported shell versions (45–50).
 
 import Meta from 'gi://Meta';
 
