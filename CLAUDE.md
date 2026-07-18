@@ -1,6 +1,8 @@
 # Ultrawide Shortcuts
 
-GNOME Shell 45–50 extension (GJS ES6+ modules, GObject Introspection).
+GNOME Shell 46–50 extension (GJS ES6+ modules, GObject Introspection).
+Targeting 46+ is what lets the code call `unmaximize()` flaglessly and use
+`Adw.AlertDialog` directly — EGO rejects the GNOME 45 shims for those.
 
 ## Critical: Source Changes Require Session Restart
 
@@ -10,20 +12,23 @@ GSettings/dconf values ARE live — prefer config over hardcoded values.
 
 ## Critical: New Source Files Need Manual Wiring
 
-Both the lint and CI bundle use **explicit file lists**, not globs. When adding a
-new `.js` module, add it to **all** of these or it silently breaks:
+Lint and the release bundle use **explicit file lists**, not globs. When adding a
+new `.js` module, add it to **both** of these or it silently breaks:
 
 - `package.json` → `lint` script (else it's never linted)
-- `.github/workflows/package.yml` → the `zip` file list (else it's missing from the
-  released bundle and every `import` of it fails at load on users' machines)
+- `bundle-files.txt` → the release bundle (else it's missing from the released
+  bundle and every `import` of it fails at load on users' machines)
 
 Local `restart-shell` is unaffected (the installed dir is a symlink to the repo), so
-a missing entry won't show up until CI/release.
+a missing entry won't show up until CI/release. **shexli does not catch this** — it
+reports a bundle missing an imported module as `clean`, which is how v1.2.2 shipped
+broken. `bundle-files.txt` is the single source for CI and `./dev.sh ego`.
 
 ## Dev Commands
 
 ```bash
 npm run lint                      # ESLint — always run before restart
+./dev.sh ego                      # shexli — run before tagging a release/EGO upload
 ./dev.sh restart-shell            # Reload source (session logout/login)
 ./dev.sh toggle                   # Re-run enable()/disable() only
 ./dev.sh trigger WM CMD           # Test via D-Bus without keypress

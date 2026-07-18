@@ -29,12 +29,8 @@ jobs:
 
       - name: Create ZIP
         run: |
-          zip ultrawide-shortcuts@lukewilde.co.uk.zip \
-            extension.js prefs.js \
-            positioning.js keybinding-conflicts.js drag-snap.js edge-snap.js \
-            compat.js \
-            metadata.json \
-            schemas/org.gnome.shell.extensions.ultrawide-shortcuts.gschema.xml
+          # File list lives in bundle-files.txt so CI and ./dev.sh ego can't drift.
+          zip ultrawide-shortcuts@lukewilde.co.uk.zip -@ < bundle-files.txt
 
       - name: Validate bundle (shexli)
         run: |
@@ -43,6 +39,14 @@ jobs:
           # Letting pip pick tree-sitter 0.26 segfaults the parser, so pin the core.
           python3 -m pip install --quiet shexli==0.2.1 "tree-sitter<0.26"
           shexli ultrawide-shortcuts@lukewilde.co.uk.zip
+
+          # shexli exits 0 even when it reports errors, so gate on the JSON status
+          # instead — these are the same rules EGO runs against an upload.
+          shexli --format json ultrawide-shortcuts@lukewilde.co.uk.zip > shexli.json
+          if [ "$(jq -r '.summary.status' shexli.json)" != "clean" ]; then
+            echo "::error::shexli found $(jq -rc '.summary.severity_counts' shexli.json) — see the report above"
+            exit 1
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

@@ -6,23 +6,6 @@ import GioUnix from 'gi://GioUnix';
 import GLib from 'gi://GLib';
 import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-// Adw.AlertDialog landed in libadwaita 1.5 (GNOME 46); on 45 use
-// Adw.MessageDialog (transient parent + argless present). Response API is shared.
-const _HAS_ALERT_DIALOG = typeof Adw.AlertDialog !== 'undefined';
-
-function makeAlertDialog(props) {
-  return new (_HAS_ALERT_DIALOG ? Adw.AlertDialog : Adw.MessageDialog)(props);
-}
-
-function presentAlertDialog(dialog, parent) {
-  if (_HAS_ALERT_DIALOG) {
-    dialog.present(parent);
-  } else {
-    dialog.set_transient_for(parent);
-    dialog.present();
-  }
-}
-
 export default class UltrawideShortcutsPreferences extends ExtensionPreferences {
   fillPreferencesWindow(window) {
     this._settings = this.getSettings();
@@ -501,7 +484,7 @@ export default class UltrawideShortcutsPreferences extends ExtensionPreferences 
         return;
       }
 
-      const dialog = makeAlertDialog({
+      const dialog = new Adw.AlertDialog({
         heading: 'Select Window',
         body: 'Choose a running application:',
       });
@@ -520,7 +503,7 @@ export default class UltrawideShortcutsPreferences extends ExtensionPreferences 
         }
       });
 
-      presentAlertDialog(dialog, this._window);
+      dialog.present(this._window);
     } catch (e) {
       console.error(`ultrawide-shortcuts: window detection failed: ${e.message}`);
       this._showMessage('Failed to detect windows. Is the extension running?');
@@ -528,12 +511,12 @@ export default class UltrawideShortcutsPreferences extends ExtensionPreferences 
   }
 
   _showMessage(text) {
-    const dialog = makeAlertDialog({
+    const dialog = new Adw.AlertDialog({
       heading: 'Info',
       body: text,
     });
     dialog.add_response('ok', 'OK');
-    presentAlertDialog(dialog, this._window);
+    dialog.present(this._window);
   }
 
   // --- Position helpers ---

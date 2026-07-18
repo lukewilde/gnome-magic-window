@@ -8,7 +8,6 @@ import Meta from 'gi://Meta';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { gridToPixels, shrinkWorkArea } from './positioning.js';
-import { unmaximizeWindow } from './compat.js';
 
 const POLL_INTERVAL_MS = 16;
 
@@ -119,7 +118,7 @@ export class EdgeSnapManager {
       const w = window;
       this._idleCommitId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
         this._idleCommitId = 0;
-        try { unmaximizeWindow(w); } catch { /* already unmaximized */ }
+        try { w.unmaximize(); } catch { /* already unmaximized */ }
         w.move_resize_frame(
           false,
           Math.round(rect.x), Math.round(rect.y),

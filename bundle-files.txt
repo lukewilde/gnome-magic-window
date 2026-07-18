@@ -1,0 +1,8 @@
+extension.js
+prefs.js
+positioning.js
+keybinding-conflicts.js
+drag-snap.js
+edge-snap.js
+metadata.json
+schemas/org.gnome.shell.extensions.ultrawide-shortcuts.gschema.xml

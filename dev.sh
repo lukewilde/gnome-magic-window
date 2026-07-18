@@ -67,6 +67,25 @@ case "${1:-help}" in
     gnome-extensions pack . --out-dir=dist --force
     echo ":: Packed to dist/$EXT.shell-extension.zip"
     ;;
+  ego)
+    # Runs the same rules extensions.gnome.org applies to an upload, against the
+    # same bundle CI builds. Pins tree-sitter: shexli 0.2.1 accepts >=0.25.0, but
+    # tree-sitter 0.26 segfaults against tree-sitter-javascript's 0.25 ABI.
+    VENV="${TMPDIR:-/tmp}/ultrawide-shexli-venv"
+    if [ ! -x "$VENV/bin/shexli" ]; then
+      echo ":: Bootstrapping shexli into $VENV..."
+      python3 -m venv "$VENV"
+      "$VENV/bin/pip" install --quiet shexli==0.2.1 "tree-sitter<0.26"
+    fi
+    ZIP="$(mktemp -d)/$EXT.zip"
+    zip -q "$ZIP" -@ < bundle-files.txt
+    "$VENV/bin/shexli" "$ZIP"
+    # shexli exits 0 even when it reports errors, so gate on the JSON status.
+    if [ "$("$VENV/bin/shexli" --format json "$ZIP" | jq -r '.summary.status')" != "clean" ]; then
+      echo ":: FAILED — fix the findings above before uploading to EGO."
+      exit 1
+    fi
+    ;;
   help|*)
     echo "Usage: ./dev.sh <command>"
     echo ""
@@ -78,6 +97,7 @@ case "${1:-help}" in
     echo "  logs           - Tail GNOME Shell journal logs"
     echo "  errors         - Show extension errors from GNOME Shell"
     echo "  debug          - Show extension info and last debug output"
+    echo "  ego            - Validate the release bundle with shexli (EGO review rules)"
     echo "  pack           - Package extension as .zip for distribution"
     ;;
 esac

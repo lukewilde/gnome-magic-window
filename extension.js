@@ -5,7 +5,6 @@ import Shell from 'gi://Shell';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { gridToPixels, pickNeighbour, shrinkWorkArea } from './positioning.js';
-import { unmaximizeWindow } from './compat.js';
 import { KeybindingConflictManager } from './keybinding-conflicts.js';
 import { DragSnapManager } from './drag-snap.js';
 import { EdgeSnapManager } from './edge-snap.js';
@@ -318,7 +317,7 @@ export default class UltrawideShortcutsExtension extends Extension {
     const rect = gridToPixels(selection, { cols: grid.cols, rows: grid.rows }, workArea, grid.cellGap);
     // Fullscreen windows ignore move_resize_frame.
     if (focused.is_fullscreen()) focused.unmake_fullscreen();
-    unmaximizeWindow(focused);
+    focused.unmaximize();
     focused.move_resize_frame(
       false,
       Math.round(rect.x),
@@ -389,10 +388,12 @@ export default class UltrawideShortcutsExtension extends Extension {
     // main-loop iteration; grabbing in the same stack frame races that and
     // leaves the key dead. Defer the first attempt and retry briefly.
     this._navGrabRetries = 5;
-    this._navGrabId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE,
+    this._navGrabId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100,
       () => this._grabPendingNav());
   }
 
+  // Repeats on the same source until every accelerator is grabbed or the
+  // retries run out, so _navGrabId is only cleared once the source is gone.
   _grabPendingNav() {
     this._navPending = this._navPending.filter(({ accel, grid, direction }) => {
       const action = global.display.grab_accelerator(accel, 0);
@@ -413,16 +414,16 @@ export default class UltrawideShortcutsExtension extends Extension {
 
     if (this._navPending.length === 0) {
       this._navGrabId = null;
-    } else if (this._navGrabRetries-- > 0) {
-      this._navGrabId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100,
-        () => this._grabPendingNav());
-    } else {
+      return GLib.SOURCE_REMOVE;
+    }
+    if (this._navGrabRetries-- <= 0) {
       console.error('ultrawide-shortcuts: failed to grab nav accelerators: ' +
         this._navPending.map(p => p.accel).join(', '));
       this._navPending = [];
       this._navGrabId = null;
+      return GLib.SOURCE_REMOVE;
     }
-    return GLib.SOURCE_REMOVE;
+    return GLib.SOURCE_CONTINUE;
   }
 
   _unregisterNav() {
