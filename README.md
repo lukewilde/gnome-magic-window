@@ -89,7 +89,13 @@ Hold a modifier key while dragging a window to snap it to the nearest grid posit
 
 ## Edge Snapping
 
-Drag a window near a monitor edge to snap it to the best-matching grid position that touches that edge.
+Drag a window near a monitor edge to snap it to the best-matching grid position that touches that edge. No modifier is needed — just get the pointer within the edge threshold. Which position you get depends on which edge you're near and where along it the pointer sits:
+
+- **Top edge** — favours the **narrower** edge-touching positions.
+- **Bottom edge** — favours the **wider** edge-touching positions.
+- **Left / right edges** — the pointer's **height** along the edge selects the size: sweep from top to bottom to cycle through the edge-touching positions from widest to narrowest.
+
+Only grids with edge snapping enabled contribute positions, and only positions that actually touch the edge you're near are considered.
 
 ## Directional Navigation
 
