@@ -1,115 +1,74 @@
 # Ultrawide Shortcuts
-A GNOME Shell extension designed for efficient window management and application launching. Instantly spawn or focus applications with shortcuts, cycle through multi-window instances, and snap windows into custom grid layouts.
 
-## Main Features
+A GNOME Shell extension for people who drive their desktop from the keyboard. Built with ultrawide monitors in mind, where "left half / right half" tiling wastes most of the screen.
 
-### Launcher
-- **Launch apps** — Press a shortcut to focus an app. If it's not running, a second press launches it.
-- **Multi-window cycling** — Multiple windows of the same app? The shortcut cycles through them.
+It does two things:
 
-### Window Positions
-- **Grid positioning** — Snap the focused window into configurable grid positions with `Alt+Super+1-9`.
-- **Preset cycling** — Press the same position shortcut again to cycle between alternative sizes.
-- **Directional navigation** — Move the focused window between a grid's positions with a prefix + arrow keys (Left/Right = nearest split, Up/Down = wider/narrower).
-- **Drag-to-snap** — Hold a per-grid modifier while dragging to snap a window to the nearest grid position.
-- **Edge snapping** — Drag a window near a monitor edge to snap it to the best-matching grid position that touches that edge.
+1. **App shortcuts**: one key per app. Press it to focus the app; press it again to cycle its windows; double-press to launch it if it isn't running.
+2. **Grid window positions**: snap the focused window into positions on grids you define. The default grid has 16 columns, so you get useful ultrawide layouts like "centred half" or "left three-quarters", not just halves and quarters.
 
-## Manual Install
+Everything below describes the **default** setup. Every shortcut, grid, and behaviour is configurable in the preferences UI.
+
+## Install
+
+Install from [extensions.gnome.org](https://extensions.gnome.org/extension/9926/ultrawide-shortcuts/).
+
+<details>
+<summary>Manual install from source</summary>
 
 ```bash
 cd ~/.local/share/gnome-shell/extensions
 git clone git@github.com:lukewilde/ultrawide-shortcuts.git ultrawide-shortcuts@lukewilde.co.uk
-cd ultrawide-shortcuts@lukewilde.co.uk
-glib-compile-schemas schemas/
+glib-compile-schemas ultrawide-shortcuts@lukewilde.co.uk/schemas/
 ```
 
-Restart your GNOME session (log out / log in) before running:
+Log out and back in, then:
 
 ```bash
 gnome-extensions enable ultrawide-shortcuts@lukewilde.co.uk
 ```
 
-## Configure
+</details>
 
-Open the preferences UI:
+## Two minutes to productive
+
+Focus any window and try these:
+
+| Press | What happens |
+| --- | --- |
+| `Alt+Super+4` | Snap to the **left half**. Press again: widen to three-quarters. |
+| `Alt+Super+5` | Snap to the **centred half**. Repeat presses widen it. |
+| `Alt+Super+6` | Snap to the **right half**. |
+| `Ctrl` + drag a window | Preview and snap to the nearest grid position. Plain drags are untouched. |
+| Drag a window to a screen edge | Snap to a grid position along that edge, no modifier needed. |
+
+Then set up your first app shortcut: run `gnome-extensions prefs ultrawide-shortcuts@lukewilde.co.uk` and add a binding with three fields:
+
+- **Shortcut** — e.g. `<Shift><Alt><Ctrl>r`
+- **WM Class** — case-insensitive substring matching the window, e.g. `kitty`
+- **Command** — what to run when no window matches, e.g. `/usr/bin/kitty`
+
+## The default grids
+
+Two grids ship out of the box:
+
+**Columns** (16×1, for main work windows) — `Alt+Super+1–9`. Keys `4`/`5`/`6` are the halves shown above; `1`/`2`/`3` are quarter-ish slots (left, centre-left, right); `7`/`8`/`9` are narrow slots for chat/music-sized windows. Where a key has multiple sizes, repeated presses cycle through them.
+
+**Floating Grid** (8×4, for small windows) — `Shift+Alt+Super+1–9` places the window in a 3×3 arrangement laid out like a numpad: `7` is top-left, `5` is centre, `3` is bottom-right. Its drag modifier is `Alt`.
+
+You can edit these grids or add your own — grid dimensions, margins, gaps, and every position are yours to change.
+
+## Beyond the basics
+
+**Drag-to-snap** — hold a grid's modifier (`Ctrl` or `Alt`; each grid has its own) while dragging, release to commit. GNOME's built-in edge tiling fights with this — disable it for best results:
 
 ```bash
-gnome-extensions prefs ultrawide-shortcuts@lukewilde.co.uk
+gsettings set org.gnome.mutter edge-tiling false
 ```
 
-Each binding has three fields:
+**Edge snapping** — drag near a screen edge (no modifier) and the window snaps to a grid position touching that edge. The top edge favours narrower positions, the bottom favours wider ones, and on the left/right edges the pointer's height picks the size, sweep down the edge to go from widest to narrowest.
 
-- **Shortcut** — The key combination (e.g. `<Shift><Alt><Ctrl>r`)
-- **WM Class** — Case-insensitive substring to match the window (e.g. `kitty`)
-- **Command** — Launch command if no matching window exists (e.g. `/usr/bin/kitty`)
-
-## Position Presets
-
-- `Alt+Super+1` through `Alt+Super+9` snap the focused window to grid positions on a **16-column × 1-row** grid.
-- Presets with multiple sizes cycle on repeated presses
-- column spans are 1-indexed and inclusive:
-
-| Key | First press            | Second press               | Third press         |
-| --- | ---------------------- | -------------------------- | ------------------- |
-| 1   | Left quarter (1–4)     | Narrower left (1–3)        | —                   |
-| 2   | Center-left (4–8)      | Narrower (5–8)             | —                   |
-| 3   | Right quarter (13–16)  | Narrower right (14–16)     | —                   |
-| 4   | Left half (1–8)        | Left three-quarters (1–12) | —                   |
-| 5   | Center half (5–12)     | Wider center (4–13)        | Widest center (3–14) |
-| 6   | Right half (9–16)      | Right three-quarters (5–16)| —                   |
-| 7   | Narrow left (1–3)      | —                          | —                   |
-| 8   | Right-center (9–13)    | Narrower (9–12)            | —                   |
-| 9   | Narrow right (14–16)   | —                          | —                   |
-
-`Shift+Alt+Super+1` through `Shift+Alt+Super+9` position a floating window on an **8-column × 4-row** grid.
-
-| Key | Position      |
-| --- | ------------- |
-| 7   | Top left      |
-| 8   | Top center    |
-| 9   | Top right     |
-| 4   | Mid left      |
-| 5   | Mid center    |
-| 6   | Mid right     |
-| 1   | Bottom left   |
-| 2   | Bottom center |
-| 3   | Bottom right  |
-
-## Drag-to-Snap
-
-Hold a modifier key while dragging a window to snap it to the nearest grid position. Each grid can have its own modifier.
-
-- Snapping is **opt-in**: no modifier held = normal drag.
-- Release the mouse while holding the modifier to commit the snap.
-- Available modifiers: **Ctrl**, **Alt**. (Shift and Super are intercepted by the compositor for window manipulation, so they can't be used here.)
-- GNOME's built-in edge tiling will compete with drag-to-snap — disable it for best results:
-  ```bash
-  gsettings set org.gnome.mutter edge-tiling false
-  ```
-
-## Edge Snapping
-
-Drag a window near a monitor edge to snap it to the best-matching grid position that touches that edge. No modifier is needed — just get the pointer within the edge threshold. Which position you get depends on which edge you're near and where along it the pointer sits:
-
-- **Top edge** — favours the **narrower** edge-touching positions.
-- **Bottom edge** — favours the **wider** edge-touching positions.
-- **Left / right edges** — the pointer's **height** along the edge selects the size: sweep from top to bottom to cycle through the edge-touching positions from widest to narrowest.
-
-Only grids with edge snapping enabled contribute positions, and only positions that actually touch the edge you're near are considered.
-
-## Directional Navigation
-
-Assign a prefix to a grid, then use **prefix + arrow keys** to move the focused window between that grid's positions:
-
-- **Left / Right** — jump to the nearest split in that direction.
-- **Up / Down** — make the window wider / narrower.
-
-Configure the prefix per grid on the Window Positions page. Available prefixes: **None**, **Super**, **Alt+Super**, **Ctrl+Super**, **Shift+Super**. A `Super`-based prefix takes over GNOME's built-in tiling/maximize shortcuts while the extension is enabled; the originals are backed up and restored on disable.
-
-## Double-Press to Launch
-
-By default, an app shortcut only **launches** an app on a quick double-press; a single press still focuses or cycles existing windows. This guards against accidentally spawning apps. This is configurable.
-
+**Directional navigation** — give a grid a prefix (e.g. `Super`), then `prefix+Left/Right` jumps the window to the nearest split in that direction and `prefix+Up/Down` widens/narrows it. A `Super` prefix takes over GNOME's built-in tiling shortcuts while the extension is enabled; the originals are backed up and restored on disable.
 
 ## License
 
