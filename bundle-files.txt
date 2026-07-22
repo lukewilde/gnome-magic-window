@@ -4,5 +4,6 @@ positioning.js
 keybinding-conflicts.js
 drag-snap.js
 edge-snap.js
+timers.js
 metadata.json
 schemas/org.gnome.shell.extensions.ultrawide-shortcuts.gschema.xml

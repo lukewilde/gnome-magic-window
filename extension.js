@@ -8,6 +8,7 @@ import { gridToPixels, pickNeighbour, shrinkWorkArea } from './positioning.js';
 import { KeybindingConflictManager } from './keybinding-conflicts.js';
 import { DragSnapManager } from './drag-snap.js';
 import { EdgeSnapManager } from './edge-snap.js';
+import { TimerRegistry } from './timers.js';
 
 // The shell OSD auto-hides 1500ms after the last show(); refresh under that to
 // keep it up for the whole double-press window.
@@ -17,6 +18,21 @@ const LAUNCH_OSD_MS = 1000;
 // Prefs fires 'changed' per keystroke; an undebounced positions reload would
 // rewrite mutter's nav keybindings on every character.
 const SETTINGS_RELOAD_DEBOUNCE_MS = 300;
+
+// Every GLib source this file owns, keyed here so disable() can drop the lot
+// with one removeAll(). Each key holds at most one live source — see
+// TimerRegistry in timers.js. DragSnapManager and EdgeSnapManager each keep
+// their own registry, drained by their own disable().
+const TIMER = {
+  RELOAD_BINDINGS: 'reload-bindings',   // debounce 'changed::bindings'
+  RELOAD_POSITIONS: 'reload-positions', // debounce 'changed::positions'
+  PRESET_CYCLE: 'preset-cycle',         // expire the position-cycling window
+  NAV_GRAB: 'nav-grab',                 // retry grabbing nav accelerators
+  LAUNCH_DEBOUNCE: 'launch-debounce',   // suppress repeat app launches
+  OSD_HIDE: 'osd-hide',                 // hide the "Launching …" OSD
+  LAUNCH_PROMPT_REFRESH: 'launch-prompt-refresh', // keep the OSD alive
+  LAUNCH_PROMPT_EXPIRY: 'launch-prompt-expiry',   // double-press deadline
+};
 
 // Mirrors the schema default. Used only when 'positions' was never set or is
 // invalid — an explicitly emptied list stays empty.
@@ -62,17 +78,15 @@ export default class UltrawideShortcutsExtension extends Extension {
     this._positionActions = [];
     this._navActions = [];
     this._navPending = [];
-    this._navGrabId = null;
-    this._reloadTimers = new Map(); // key -> GLib source id
+    // Every GLib source this class creates lives here, keyed by TIMER.*, and
+    // disable() drains it. Never call GLib.timeout_add directly.
+    this._reloadTimers = new TimerRegistry();
     this._conflicts = new KeybindingConflictManager(this._settings);
     this._launching = false;
-    this._launchingTimerId = null;
-    this._osdHideId = null;
     this._lastPreset = null; // { key, windowId, index }
-    this._presetTimerId = null;
     this._focusHistory = []; // stableSequence[], MRU first
     this._cycleSnapshot = null; // { wmClass, order: stableSequence[] }
-    this._pendingLaunch = null; // { key, timeoutId }
+    this._pendingLaunch = null; // { key, icon, name } — timers live in _reloadTimers
     this._requireDoublePress = this._settings.get_boolean('require-double-press-to-launch');
     this._doublePressTimeoutMs = this._settings.get_int('double-press-timeout-ms');
     global.display.connectObject(
@@ -85,11 +99,11 @@ export default class UltrawideShortcutsExtension extends Extension {
     this._registerNav();
 
     this._settings.connectObject(
-      'changed::bindings', () => this._scheduleReload('bindings', () => {
+      'changed::bindings', () => this._scheduleReload(TIMER.RELOAD_BINDINGS, () => {
         this._unregisterBindings();
         this._registerBindings();
       }),
-      'changed::positions', () => this._scheduleReload('positions', () => {
+      'changed::positions', () => this._scheduleReload(TIMER.RELOAD_POSITIONS, () => {
         this._unregisterPositions();
         this._unregisterNav();
         this._registerPositions();
@@ -111,20 +125,11 @@ export default class UltrawideShortcutsExtension extends Extension {
   }
 
   disable() {
-    // Remove main-loop sources first thing (EGO review guideline).
-    if (this._presetTimerId) {
-      GLib.source_remove(this._presetTimerId);
-      this._presetTimerId = null;
-    }
-    if (this._launchingTimerId) {
-      GLib.source_remove(this._launchingTimerId);
-      this._launchingTimerId = null;
-    }
-    this._clearPendingLaunch();
-    this._cancelOsdHide();
-
-    for (const id of this._reloadTimers.values()) GLib.source_remove(id);
-    this._reloadTimers.clear();
+    // Remove main-loop sources first thing (EGO review guideline). Every
+    // source this class creates is in the registry — see the TIMER keys above.
+    // The two snap managers drain their own registries in their disable().
+    this._reloadTimers.removeAll();
+    this._pendingLaunch = null;
 
     if (this._edgeSnap) {
       this._edgeSnap.disable();
@@ -154,15 +159,10 @@ export default class UltrawideShortcutsExtension extends Extension {
   }
 
   _scheduleReload(key, fn) {
-    const existing = this._reloadTimers.get(key);
-    if (existing) GLib.source_remove(existing);
-    const id = GLib.timeout_add(
-      GLib.PRIORITY_DEFAULT, SETTINGS_RELOAD_DEBOUNCE_MS, () => {
-        this._reloadTimers.delete(key);
-        fn();
-        return GLib.SOURCE_REMOVE;
-      });
-    this._reloadTimers.set(key, id);
+    this._reloadTimers.add(key, SETTINGS_RELOAD_DEBOUNCE_MS, () => {
+      fn();
+      return GLib.SOURCE_REMOVE;
+    });
   }
 
   _setupDbus() {
@@ -286,10 +286,8 @@ export default class UltrawideShortcutsExtension extends Extension {
     }
     this._lastPreset = { key: shortcutConfig.shortcut, windowId: focusedId, index: nextIndex };
 
-    if (this._presetTimerId) GLib.source_remove(this._presetTimerId);
-    this._presetTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+    this._reloadTimers.add(TIMER.PRESET_CYCLE, 1000, () => {
       this._lastPreset = null;
-      this._presetTimerId = null;
       return GLib.SOURCE_REMOVE;
     });
 
@@ -388,12 +386,11 @@ export default class UltrawideShortcutsExtension extends Extension {
     // main-loop iteration; grabbing in the same stack frame races that and
     // leaves the key dead. Defer the first attempt and retry briefly.
     this._navGrabRetries = 5;
-    this._navGrabId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100,
-      () => this._grabPendingNav());
+    this._reloadTimers.add(TIMER.NAV_GRAB, 100, () => this._grabPendingNav());
   }
 
-  // Repeats on the same source until every accelerator is grabbed or the
-  // retries run out, so _navGrabId is only cleared once the source is gone.
+  // Repeats on the TIMER.NAV_GRAB source until every accelerator is grabbed or
+  // the retries run out; returning SOURCE_REMOVE drops the registry entry.
   _grabPendingNav() {
     this._navPending = this._navPending.filter(({ accel, grid, direction }) => {
       const action = global.display.grab_accelerator(accel, 0);
@@ -412,25 +409,18 @@ export default class UltrawideShortcutsExtension extends Extension {
       return false;
     });
 
-    if (this._navPending.length === 0) {
-      this._navGrabId = null;
-      return GLib.SOURCE_REMOVE;
-    }
+    if (this._navPending.length === 0) return GLib.SOURCE_REMOVE;
     if (this._navGrabRetries-- <= 0) {
       console.error('ultrawide-shortcuts: failed to grab nav accelerators: ' +
         this._navPending.map(p => p.accel).join(', '));
       this._navPending = [];
-      this._navGrabId = null;
       return GLib.SOURCE_REMOVE;
     }
     return GLib.SOURCE_CONTINUE;
   }
 
   _unregisterNav() {
-    if (this._navGrabId) {
-      GLib.source_remove(this._navGrabId);
-      this._navGrabId = null;
-    }
+    this._reloadTimers.remove(TIMER.NAV_GRAB);
     this._navPending = [];
     for (const { action, handlerId } of this._navActions) {
       global.display.disconnect(handlerId);
@@ -526,41 +516,34 @@ export default class UltrawideShortcutsExtension extends Extension {
           const { icon, name } = this._pendingLaunch;
           this._clearPendingLaunch();
           this._showOsd(icon, `Launching ${name}`);
-          this._osdHideId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, LAUNCH_OSD_MS, () => {
-            this._osdHideId = null;
+          this._reloadTimers.add(TIMER.OSD_HIDE, LAUNCH_OSD_MS, () => {
             Main.osdWindowManager.hideAll();
             return GLib.SOURCE_REMOVE;
           });
           // fall through to launch
         } else {
           this._clearPendingLaunch();
-          this._cancelOsdHide();
+          this._reloadTimers.remove(TIMER.OSD_HIDE);
           const { icon, name } = this._resolveApp(wmClass);
           const label = `Press again to launch ${name}`;
           this._showOsd(icon, label);
-          this._pendingLaunch = {
-            key: shortcut,
-            icon, name,
-            refreshId: GLib.timeout_add(GLib.PRIORITY_DEFAULT, OSD_REFRESH_MS, () => {
-              this._showOsd(icon, label);
-              return GLib.SOURCE_CONTINUE;
-            }),
-            timeoutId: GLib.timeout_add(GLib.PRIORITY_DEFAULT, this._doublePressTimeoutMs, () => {
-              this._pendingLaunch.timeoutId = null;
-              this._clearPendingLaunch();
-              Main.osdWindowManager.hideAll();
-              return GLib.SOURCE_REMOVE;
-            }),
-          };
+          this._pendingLaunch = { key: shortcut, icon, name };
+          this._reloadTimers.add(TIMER.LAUNCH_PROMPT_REFRESH, OSD_REFRESH_MS, () => {
+            this._showOsd(icon, label);
+            return GLib.SOURCE_CONTINUE;
+          });
+          this._reloadTimers.add(TIMER.LAUNCH_PROMPT_EXPIRY, this._doublePressTimeoutMs, () => {
+            this._clearPendingLaunch();
+            Main.osdWindowManager.hideAll();
+            return GLib.SOURCE_REMOVE;
+          });
           return;
         }
       }
 
       this._launching = true;
-      if (this._launchingTimerId) GLib.source_remove(this._launchingTimerId);
-      this._launchingTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+      this._reloadTimers.add(TIMER.LAUNCH_DEBOUNCE, 1000, () => {
         this._launching = false;
-        this._launchingTimerId = null;
         return GLib.SOURCE_REMOVE;
       });
       try {
@@ -586,18 +569,9 @@ export default class UltrawideShortcutsExtension extends Extension {
   }
 
   _clearPendingLaunch() {
-    if (!this._pendingLaunch) return;
-    if (this._pendingLaunch.timeoutId)
-      GLib.source_remove(this._pendingLaunch.timeoutId);
-    if (this._pendingLaunch.refreshId)
-      GLib.source_remove(this._pendingLaunch.refreshId);
+    this._reloadTimers.remove(TIMER.LAUNCH_PROMPT_REFRESH);
+    this._reloadTimers.remove(TIMER.LAUNCH_PROMPT_EXPIRY);
     this._pendingLaunch = null;
-  }
-
-  _cancelOsdHide() {
-    if (!this._osdHideId) return;
-    GLib.source_remove(this._osdHideId);
-    this._osdHideId = null;
   }
 
   _resolveApp(wmClass) {

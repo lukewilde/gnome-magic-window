@@ -8,8 +8,16 @@ import Meta from 'gi://Meta';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { gridToPixels, shrinkWorkArea } from './positioning.js';
+import { TimerRegistry } from './timers.js';
 
 const POLL_INTERVAL_MS = 16;
+
+// Every GLib source this class owns, keyed here so disable() can drop the lot
+// with one removeAll(). See TimerRegistry in timers.js.
+const TIMER = {
+  POLL: 'poll',               // 60 Hz pointer tracking during a drag
+  IDLE_COMMIT: 'idle-commit', // deferred move_resize_frame after grab-op-end
+};
 
 const MOD_NAME_TO_MASK = {
   ctrl: Clutter.ModifierType.CONTROL_MASK,
@@ -35,8 +43,9 @@ export class EdgeSnapManager {
 
     this._grabBeginId = 0;
     this._grabEndId = 0;
-    this._pollId = 0;
-    this._idleCommitId = 0;
+    // Every GLib source this class creates lives here, keyed by TIMER.*, and
+    // disable() drains it. Never call GLib.timeout_add/idle_add directly.
+    this._timers = new TimerRegistry();
 
     this._draggedWindow = null;
     this._currentRect = null;
@@ -58,11 +67,8 @@ export class EdgeSnapManager {
   }
 
   disable() {
-    this._stopPoll();
-    if (this._idleCommitId) {
-      GLib.source_remove(this._idleCommitId);
-      this._idleCommitId = 0;
-    }
+    // Every source this class creates is in the registry — see TIMER above.
+    this._timers.removeAll();
     if (this._grabBeginId) {
       global.display.disconnect(this._grabBeginId);
       this._grabBeginId = 0;
@@ -116,8 +122,7 @@ export class EdgeSnapManager {
     if (!yielding && this._draggedWindow && this._draggedWindow === window && this._currentRect) {
       const rect = this._currentRect;
       const w = window;
-      this._idleCommitId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-        this._idleCommitId = 0;
+      this._timers.addIdle(TIMER.IDLE_COMMIT, () => {
         try { w.unmaximize(); } catch { /* already unmaximized */ }
         w.move_resize_frame(
           false,
@@ -143,18 +148,15 @@ export class EdgeSnapManager {
     return false;
   }
 
+  // A poll already running keeps its phase — don't re-arm it mid-drag.
   _startPoll() {
-    if (this._pollId) return;
-    this._pollId = GLib.timeout_add(
-      GLib.PRIORITY_DEFAULT, POLL_INTERVAL_MS,
+    if (this._timers.has(TIMER.POLL)) return;
+    this._timers.add(TIMER.POLL, POLL_INTERVAL_MS,
       () => { this._tick(); return GLib.SOURCE_CONTINUE; });
   }
 
   _stopPoll() {
-    if (this._pollId) {
-      GLib.source_remove(this._pollId);
-      this._pollId = 0;
-    }
+    this._timers.remove(TIMER.POLL);
   }
 
   _dragSnapMaskUnion() {
