@@ -6,8 +6,9 @@ import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { gridToPixels, pickNeighbour, shrinkWorkArea } from './positioning.js';
 import { KeybindingConflictManager } from './keybinding-conflicts.js';
-import { DragSnapManager } from './drag-snap.js';
-import { EdgeSnapManager } from './edge-snap.js';
+import { SnapManager } from './snap-manager.js';
+import { DragSnapStrategy } from './drag-snap.js';
+import { EdgeSnapStrategy } from './edge-snap.js';
 import { TimerRegistry } from './timers.js';
 
 // The shell OSD auto-hides 1500ms after the last show(); refresh under that to
@@ -21,8 +22,8 @@ const SETTINGS_RELOAD_DEBOUNCE_MS = 300;
 
 // Every GLib source this file owns, keyed here so disable() can drop the lot
 // with one removeAll(). Each key holds at most one live source — see
-// TimerRegistry in timers.js. DragSnapManager and EdgeSnapManager each keep
-// their own registry, drained by their own disable().
+// TimerRegistry in timers.js. SnapManager keeps its own registry, drained by
+// its own disable().
 const TIMER = {
   RELOAD_BINDINGS: 'reload-bindings',   // debounce 'changed::bindings'
   RELOAD_POSITIONS: 'reload-positions', // debounce 'changed::positions'
@@ -118,26 +119,25 @@ export default class UltrawideShortcutsExtension extends Extension {
       },
       this);
 
-    this._dragSnap = new DragSnapManager(this, this._settings);
-    this._dragSnap.enable();
-    this._edgeSnap = new EdgeSnapManager(this, this._settings);
-    this._edgeSnap.enable();
+    // Highest priority first — a held drag modifier claims the drag, so
+    // edge-snap only sees modifier-free drags.
+    this._snap = new SnapManager(this, this._settings, [
+      new DragSnapStrategy(),
+      new EdgeSnapStrategy(this._settings),
+    ]);
+    this._snap.enable();
   }
 
   disable() {
     // Remove main-loop sources first thing (EGO review guideline). Every
     // source this class creates is in the registry — see the TIMER keys above.
-    // The two snap managers drain their own registries in their disable().
+    // SnapManager drains its own registry in its disable().
     this._reloadTimers.removeAll();
     this._pendingLaunch = null;
 
-    if (this._edgeSnap) {
-      this._edgeSnap.disable();
-      this._edgeSnap = null;
-    }
-    if (this._dragSnap) {
-      this._dragSnap.disable();
-      this._dragSnap = null;
+    if (this._snap) {
+      this._snap.disable();
+      this._snap = null;
     }
 
     this._settings.disconnectObject(this);

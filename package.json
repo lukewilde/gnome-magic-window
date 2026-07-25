@@ -3,8 +3,8 @@
   "name": "ultrawide-shortcuts",
   "type": "module",
   "scripts": {
-    "lint": "eslint extension.js positioning.js prefs.js keybinding-conflicts.js drag-snap.js edge-snap.js timers.js",
-    "lint:fix": "eslint --fix extension.js positioning.js prefs.js keybinding-conflicts.js drag-snap.js edge-snap.js",
+    "lint": "eslint extension.js positioning.js prefs.js keybinding-conflicts.js snap-manager.js drag-snap.js edge-snap.js timers.js",
+    "lint:fix": "eslint --fix extension.js positioning.js prefs.js keybinding-conflicts.js snap-manager.js drag-snap.js edge-snap.js timers.js",
     "reload": "./dev.sh reload",
     "logs": "./dev.sh logs",
     "nested": "./dev.sh nested",

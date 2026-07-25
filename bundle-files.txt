@@ -2,6 +2,7 @@ extension.js
 prefs.js
 positioning.js
 keybinding-conflicts.js
+snap-manager.js
 drag-snap.js
 edge-snap.js
 timers.js
