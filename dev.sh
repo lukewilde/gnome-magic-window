@@ -62,11 +62,6 @@ case "${1:-help}" in
     echo ":: Last debug output:"
     cat "$DEBUG_FILE" 2>/dev/null || echo "(no debug output yet)"
     ;;
-  pack)
-    mkdir -p dist
-    gnome-extensions pack . --out-dir=dist --force
-    echo ":: Packed to dist/$EXT.shell-extension.zip"
-    ;;
   ego)
     # Runs the same rules extensions.gnome.org applies to an upload, against the
     # same bundle CI builds. Pins tree-sitter: shexli 0.2.1 accepts >=0.25.0, but
@@ -98,6 +93,5 @@ case "${1:-help}" in
     echo "  errors         - Show extension errors from GNOME Shell"
     echo "  debug          - Show extension info and last debug output"
     echo "  ego            - Validate the release bundle with shexli (EGO review rules)"
-    echo "  pack           - Package extension as .zip for distribution"
     ;;
 esac

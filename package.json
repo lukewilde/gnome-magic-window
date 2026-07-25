@@ -7,8 +7,7 @@
     "lint:fix": "eslint --fix extension.js positioning.js prefs.js keybinding-conflicts.js snap-manager.js drag-snap.js edge-snap.js timers.js",
     "reload": "./dev.sh reload",
     "logs": "./dev.sh logs",
-    "nested": "./dev.sh nested",
-    "pack": "gnome-extensions pack . --extra-source=positioning.js --extra-source=keybinding-conflicts.js --extra-source=drag-snap.js --extra-source=edge-snap.js --out-dir=dist --force"
+    "nested": "./dev.sh nested"
   },
   "devDependencies": {
     "eslint": "^9.0.0",
