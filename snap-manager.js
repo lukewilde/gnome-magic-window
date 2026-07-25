@@ -147,6 +147,10 @@ export class SnapManager {
       const w = window;
       // Defer commit — Mutter may still be finalizing the grab.
       this._timers.addIdle(TIMER.IDLE_COMMIT, () => {
+        // The window can be closed between grab-op-end and this idle firing.
+        // Once Mutter unmanages it the actor is gone, and move_resize_frame()
+        // on a dead MetaWindow throws straight into the main loop.
+        if (!w.get_compositor_private()) return GLib.SOURCE_REMOVE;
         try { w.unmaximize(); } catch { /* already unmaximized */ }
         w.move_resize_frame(
           false,
