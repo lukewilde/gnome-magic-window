@@ -39,6 +39,24 @@ gjs -m test/test_positioning.js   # Run unit tests
 glib-compile-schemas schemas/     # After schema changes
 ```
 
+## Releases
+
+Run the **Release** workflow from the Actions tab and pick `patch`/`minor`/`major`.
+It reads the newest `v*` tag, bumps it, creates the tag *and* the GitHub release,
+and attaches the validated bundle. `git tag v1.3.3 && git push origin v1.3.3` still
+works and takes the same path — the tag just supplies the version instead of the bump
+input. After a dispatch release, `git fetch --tags` to pull the new tag down.
+
+`release.yml` never duplicates the build: it calls `package.yml` via `workflow_call`,
+so the bundle command and the shexli pin stay in one place.
+
+**Versioning:** EGO owns the integer `version` field and overwrites whatever you send,
+so metadata.json must not contain it. The semver string users see is `version-name`
+(EGO rule: `[a-zA-Z0-9 .]{1,16}`, not overwritten). CI stamps it into the *bundle* from
+the tag; the checked-in metadata.json stays version-less so the tag can't drift from a
+committed number. `./dev.sh ego` stamps the newest tag the same way so local validation
+matches the released zip.
+
 ## Positions — Indexing Gotcha
 
 Positions stored **1-indexed** in GSettings. `gridToPixels()` takes **0-indexed** — subtract 1 before calling.

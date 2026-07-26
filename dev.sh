@@ -74,6 +74,14 @@ case "${1:-help}" in
     fi
     ZIP="$(mktemp -d)/$EXT.zip"
     zip -q "$ZIP" -@ < bundle-files.txt
+    # CI stamps version-name into the released bundle, so stamp it here too or
+    # this check validates a metadata.json that never ships. The checked-in file
+    # stays version-less; only the zip gets the field.
+    STAMP="$(mktemp -d)"
+    LAST_TAG="$(git tag -l 'v*' --sort=-v:refname | head -1)"
+    jq --arg v "${LAST_TAG:-v0.0.0}" '.["version-name"] = ($v | ltrimstr("v"))' \
+      metadata.json > "$STAMP/metadata.json"
+    (cd "$STAMP" && zip -q "$ZIP" metadata.json)
     "$VENV/bin/shexli" "$ZIP"
     # shexli exits 0 even when it reports errors, so gate on the JSON status.
     if [ "$("$VENV/bin/shexli" --format json "$ZIP" | jq -r '.summary.status')" != "clean" ]; then

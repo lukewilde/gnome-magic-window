@@ -3,9 +3,17 @@ name: Package Extension
 on:
   push:
     branches: [master]
-    tags: ['v*']
   pull_request:
     branches: [master]
+  # release.yml calls this so the lint/zip/validate steps live in exactly one
+  # place — a drifted shexli pin or bundle command would otherwise only bite
+  # on a real release.
+  workflow_call:
+    inputs:
+      version-name:
+        description: 'Semver string stamped into metadata.json as version-name'
+        type: string
+        default: ''
 
 jobs:
   lint:
@@ -22,10 +30,21 @@ jobs:
   package:
     needs: lint
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Stamp version-name
+        if: inputs.version-name != ''
+        env:
+          VERSION_NAME: ${{ inputs.version-name }}
+        run: |
+          # Only the release bundle carries a version-name; the checked-in
+          # metadata.json stays version-less so the symlinked dev install and
+          # the git tag can never disagree. EGO owns the integer `version`
+          # field, so we never write that one.
+          jq --arg v "$VERSION_NAME" '.["version-name"] = $v' metadata.json > metadata.tmp
+          mv metadata.tmp metadata.json
+          cat metadata.json
 
       - name: Create ZIP
         run: |
@@ -53,9 +72,3 @@ jobs:
         with:
           name: ultrawide-shortcuts@lukewilde.co.uk
           path: ultrawide-shortcuts@lukewilde.co.uk.zip
-
-      - name: Create release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ultrawide-shortcuts@lukewilde.co.uk.zip
